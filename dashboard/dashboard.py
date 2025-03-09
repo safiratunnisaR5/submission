@@ -27,7 +27,7 @@ def create_rfm_recap(df):
     return rfm_df
 
 # Membaca data (sesuaikan dengan nama file atau sumber data yang digunakan)
-df_day = pd.read_csv("C:/Users/ASUS/OneDrive/Gambar/subbmission/dashboard/main_data.csv")  # Gantilah sesuai dengan nama dataset
+df_day = pd.read_csv("dashboard/main_data.csv")  # Gantilah sesuai dengan nama dataset
 
 # Mengonversi kolom 'date' menjadi datetime
 df_day['date'] = pd.to_datetime(df_day['date'], errors='coerce')
