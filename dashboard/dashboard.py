@@ -61,7 +61,7 @@ st.markdown(
 )
 
 with st.sidebar:
-    st.image("logo.jpg", width=150)  # Logo sewa sepeda
+    st.image("dashboard/logo.jpg", width=150)  # Logo sewa sepeda
     st.title('Penyewaan Sepeda Dashboard')
 
     start_date, end_date = st.date_input(
