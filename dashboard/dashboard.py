@@ -1,178 +1,163 @@
+import os
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 import streamlit as st
+import matplotlib.pyplot as plt
+import seaborn as sns
+import base64
 
-# Mengubah style seaborn
-sns.set(style='darkgrid')
+# Mengatur style seaborn
+sns.set(style="whitegrid")
 
-# Menyiapkan dataframe yang diperlukan (dari analisis sebelumnya)
-def create_rfm_recap(df):
-    # Memastikan kolom 'date' dan 'hr' ada
-    if 'date' not in df.columns or 'hr' not in df.columns:
-        raise KeyError("Kolom 'date' atau 'hr' tidak ditemukan dalam dataset.")
-    if 'total' not in df.columns:
-        raise KeyError("Kolom 'total' tidak ditemukan dalam dataset.")
+# Menentukan path yang fleksibel
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_PATH = os.path.join(BASE_DIR, "main_data.csv")
+LOGO_PATH = os.path.join(BASE_DIR, "logo.jpg")
 
-    # Membuat ID sesi unik
-    df['session_id'] = df['date'].astype(str) + '_' + df['hr'].astype(str)
-
-    today_date = df['date'].max() + pd.Timedelta(days=1)  # Hari berikutnya untuk menghitung recency
-    rfm_df = df.groupby('session_id').agg(
-        recency=('date', lambda x: (today_date - x.max()).days),  # Waktu sejak penyewaan terakhir
-        frequency=('session_id', 'count'),  # Jumlah penyewaan
-        monetary=('total', 'sum')  # Jumlah total penyewaan sepeda
-    ).reset_index()
-
-    return rfm_df
-
-# Membaca data (sesuaikan dengan nama file atau sumber data yang digunakan)
-df_day = pd.read_csv("dashboard/main_data.csv")  # Gantilah sesuai dengan nama dataset
+# Membaca data dengan path yang benar
+df_day = pd.read_csv(CSV_PATH)
 
 # Mengonversi kolom 'date' menjadi datetime
-df_day['date'] = pd.to_datetime(df_day['date'], errors='coerce')
+df_day['date'] = pd.to_datetime(df_day['date'], format="%Y-%m-%d", errors='coerce')
 
-# Menghilangkan baris dengan nilai 'date' yang tidak valid (NaT)
+# Menghapus baris dengan nilai 'date' yang NaT
 df_day = df_day.dropna(subset=['date'])
 
-# Membuat RFM recap
-rfm_recap_df = create_rfm_recap(df_day)
+# Fungsi untuk mengkodekan gambar menjadi base64
+def img_to_base64(img_path):
+    with open(img_path, "rb") as image_file:
+        encoded_string = base64.b64encode(image_file.read()).decode()
+    return encoded_string
 
-# Filter tanggal pada sidebar
-min_date = df_day['date'].min()
-max_date = df_day['date'].max()
-
-# Tambahkan CSS untuk mengubah latar belakang dan sidebar
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: white;
-    }
-    [data-testid="stSidebar"] {
-        background-color: pink;
-    }
-    .stApp {
-        background-color: black;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
+# Sidebar dengan logo dan filter tanggal
 with st.sidebar:
-    st.image("dashboard/logo.jpg", width=150)  # Logo sewa sepeda
+    st.markdown(
+        f"""
+        <div style="display: flex; justify-content: center;">
+            <img src="data:image/jpg;base64,{img_to_base64(LOGO_PATH)}" width="150">
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.title('Penyewaan Sepeda Dashboard')
 
     start_date, end_date = st.date_input(
-        label='Pilih Rentang Waktu',
-        min_value=min_date,
-        max_value=max_date,
-        value=[min_date, max_date]
+        'Pilih Rentang Waktu',
+        [df_day['date'].min(), df_day['date'].max()],
+        df_day['date'].min(), df_day['date'].max()
     )
 
-    # Menampilkan data jika dicentang
+    show_dataset = st.checkbox("Tampilkan Dataset", value=True)
+    show_season_rentals = st.checkbox("Tampilkan Visualisasi Musim", value=True)
+    show_weather_rentals = st.checkbox("Tampilkan Visualisasi Cuaca", value=True)
 
-    # Checkbox untuk menampilkan dataset
-    show_dataset = st.checkbox("Tampilkan Dataset")
-
-    show_rfm = st.checkbox("Tampilkan RFM Metrics")
-
-    show_rfm_details = st.checkbox("Tampilkan Informasi Lengkap RFM")
-
-
-
-# Filter data berdasarkan rentang waktu yang dipilih
+# Filter data berdasarkan rentang tanggal
 filtered_df = df_day[(df_day['date'] >= pd.to_datetime(start_date)) & (df_day['date'] <= pd.to_datetime(end_date))]
-
-# Update RFM recap berdasarkan rentang waktu yang dipilih
-rfm_recap_df = create_rfm_recap(filtered_df)
-
-# Membuat UI Dashboard
-
 
 st.header('Dashboard Penyewaan Sepeda')
 
-# RFM Metrics: Recency, Frequency, and Monetary
-# **Selalu hitung dan simpan data RFM agar bisa digunakan di grafik**
-top_recency = rfm_recap_df.sort_values(by='recency', ascending=True).head(5)
-top_frequency = rfm_recap_df.sort_values(by='frequency', ascending=False).head(5)
-top_monetary = rfm_recap_df.sort_values(by='monetary', ascending=False).head(5)
-
+# Menampilkan dataset
 if show_dataset:
     st.subheader("Dataset")
-    st.write(df_day)
+    st.write(filtered_df)
+    st.write("""
+        Dataset ini berisi data penyewaan sepeda, termasuk informasi seperti tanggal, jam, musim, cuaca, jumlah penyewa terdaftar (registered), dan jumlah penyewa kasual (casual).
+        Tujuan utama dari dataset ini adalah untuk menganalisis pola penyewaan sepeda dan faktor-faktor yang mempengaruhinya.
+    """)
 
-if show_rfm:
-    st.subheader("RFM Metrics")
+# Visualisasi Musim
+if show_season_rentals:
+    st.subheader("Jumlah Penyewaan Sepeda Berdasarkan Musim")
+    season_rentals = filtered_df.groupby('season')[['registered', 'casual']].sum().reset_index()
+    season_rentals_melted = season_rentals.melt(id_vars=['season'], value_vars=['registered', 'casual'],
+                                                var_name='rental_type', value_name='total_rentals')
+    fig1, ax1 = plt.subplots(figsize=(10, 6))
+    sns.barplot(x='season', y='total_rentals', hue='rental_type', data=season_rentals_melted, palette='Set2', ax=ax1)
+    ax1.set_title('Jumlah Penyewaan Sepeda Berdasarkan Musim', fontsize=16)
+    ax1.set_xlabel('Musim')
+    ax1.set_ylabel('Jumlah Penyewaan Sepeda')
+    ax1.legend(title='Tipe Penyewaan')
+    st.pyplot(fig1)
+    st.write("""
+        Grafik ini menampilkan jumlah penyewaan sepeda (terdaftar dan kasual) untuk setiap musim.
+        Memungkinkan kita untuk melihat musim mana yang memiliki jumlah penyewaan tertinggi. 
+        Barplot digunakan untuk memvisualisasikan perbandingan jumlah penyewaan sepeda berdasarkan musim. 
+        
+        Data ini menunjukkan jumlah penyewaan untuk setiap jenis penyewa (registered dan casual). 
+        Berdasarkan hasil eksplorasi, bisa dilihat bahwa musim fall memiliki jumlah penyewaan terbanyak, 
+        sedangkan springer adalah musim dengan jumlah penyewaan terendah.
+    """)
 
-    col1, col2, col3 = st.columns(3)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    with col1:
-        st.subheader("Top 5 Recency (Hari Terakhir Menyewa)")
-        st.write(top_recency[['session_id', 'recency']])
+    st.subheader("Persentase Penyewaan Sepeda Berdasarkan Musim")
+    season_rentals['total_rentals'] = season_rentals['registered'] + season_rentals['casual']
+    total_rentals_all_seasons = season_rentals['total_rentals'].sum()
+    season_rentals['percentage'] = (season_rentals['total_rentals'] / total_rentals_all_seasons) * 100
+    fig2, ax2 = plt.subplots(figsize=(10, 6))
+    sns.barplot(x='season', y='percentage', data=season_rentals, palette='Set2', ax=ax2)
+    ax2.set_title('Persentase Penyewaan Sepeda Berdasarkan Musim', fontsize=16)
+    ax2.set_xlabel('Musim')
+    ax2.set_ylabel('Persentase Penyewaan (%)')
+    st.pyplot(fig2)
+    st.write("""
+        Grafik ini menampilkan persentase penyewaan sepeda untuk setiap musim.
+        Memberikan gambaran proporsi penyewaan di setiap musim terhadap total penyewaan.
+        Dengan adanya visualisasi ini, kita bisa melihat musim apa saja yang paling diminati oleh pelanggan untuk menyewa sepeda.
+    """)
 
-    with col2:
-        st.subheader("Top 5 Frequency (Penyewaan Terbanyak)")
-        st.write(top_frequency[['session_id', 'frequency']])
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    with col3:
-        st.subheader("Top 5 Monetary (Pendapatan Tertinggi)")
-        st.write(top_monetary[['session_id', 'monetary']])
+# Visualisasi Cuaca
+if show_weather_rentals:
+    st.subheader("Pengaruh Cuaca terhadap Penyewaan Sepeda")
+    weather_rentals = filtered_df.groupby('weather')[['registered', 'casual']].sum().reset_index()
+    heatmap_data = weather_rentals[['weather', 'registered', 'casual']].set_index('weather')
+    fig3, ax3 = plt.subplots(figsize=(10, 6))
+    sns.heatmap(heatmap_data.T, annot=True, cmap='coolwarm', fmt='g', cbar_kws={'label': 'Jumlah Penyewaan Sepeda'}, ax=ax3)
+    ax3.set_title('Peta Panas Pengaruh Cuaca terhadap Penyewaan Sepeda', fontsize=16)
+    ax3.set_xlabel('Kondisi Cuaca')
+    ax3.set_ylabel('Tipe Penyewaan')
+    st.pyplot(fig3)
+    st.write("""
+        Heatmap ini menampilkan korelasi antara kondisi cuaca dan jumlah penyewaan sepeda (terdaftar dan kasual).
+        Memungkinkan kita untuk melihat kondisi cuaca mana yang paling kondusif untuk penyewaan sepeda.
+    """)
 
-# **Visualisasi tetap tampil tanpa tergantung checkbox**
-st.subheader('Visualisasi RFM')
+    st.markdown("<br>", unsafe_allow_html=True)
 
-col1, col2, col3 = st.columns(3)
+    st.subheader("Persentase Penyewaan Sepeda Berdasarkan Cuaca")
+    weather_rentals['total_rentals'] = weather_rentals['registered'] + weather_rentals['casual']
+    total_rentals_all_weather = weather_rentals['total_rentals'].sum()
+    weather_rentals['percentage'] = (weather_rentals['total_rentals'] / total_rentals_all_weather) * 100
+    fig4, ax4 = plt.subplots(figsize=(8, 8))
+    ax4.pie(weather_rentals['percentage'], labels=weather_rentals['weather'], autopct='%1.1f%%', startangle=90, 
+            wedgeprops={'width': 0.3}, colors=sns.color_palette('Set3', len(weather_rentals)))
+    ax4.set_title('Persentase Penyewaan Sepeda Berdasarkan Cuaca', fontsize=16)
+    ax4.axis('equal')
+    st.pyplot(fig4)
+    st.write("""
+        Donut Chart ini menampilkan persentase penyewaan sepeda untuk setiap kondisi cuaca.
+        Memberikan gambaran proporsi penyewaan di setiap kondisi cuaca terhadap total penyewaan.
+        Dengan adanya visualisasi ini, kita bisa melihat bagaimana pengaruh cuaca terhadap jumlah penyewa sepeda.
+             
+        Barplot menunjukkan pengaruh kondisi cuaca terhadap total penyewaan sepeda. 
+        Misalnya, cuaca cerah (clear) kemungkinan akan memiliki jumlah penyewaan yang lebih tinggi dibandingkan dengan cuaca hujan. 
+        Visualisasi ini juga akan menunjukkan persentase penyewaan sepeda berdasarkan kondisi cuaca. 
+        Dan dapat dengan jelas dilihat cuaca mana yang memiliki kontribusi terbesar terhadap penyewaan sepeda.
+    """)
 
-# Plot Recency
-with col1:
-    fig, ax = plt.subplots(figsize=(8, 5))
-    barplot = sns.barplot(data=top_recency, x='session_id', y='recency', ax=ax, color='tab:blue')
-    ax.set_title("Recency (Hari Terakhir Menyewa)", fontsize=15)
-    ax.set_ylabel("Recency (Hari)", fontsize=12)
-    ax.set_xlabel("Session ID", fontsize=12)
-    for bar in barplot.patches:
-        barplot.annotate(format(bar.get_height(), '.0f'),
-                         (bar.get_x() + bar.get_width() / 2., bar.get_height()),
-                         ha='center', va='center',
-                         xytext=(0, 5),
-                         textcoords='offset points')
-    st.pyplot(fig)
-
-# Plot Frequency
-with col2:
-    fig, ax = plt.subplots(figsize=(8, 5))
-    barplot = sns.barplot(data=top_frequency, x='session_id', y='frequency', ax=ax, color='tab:green')
-    ax.set_title("Frequency (Penyewaan Terbanyak)", fontsize=15)
-    ax.set_ylabel("Frequency", fontsize=12)
-    ax.set_xlabel("Session ID", fontsize=12)
-    for bar in barplot.patches:
-        barplot.annotate(format(bar.get_height(), '.0f'),
-                         (bar.get_x() + bar.get_width() / 2., bar.get_height()),
-                         ha='center', va='center',
-                         xytext=(0, 5),
-                         textcoords='offset points')
-    st.pyplot(fig)
-
-# Plot Monetary
-with col3:
-    fig, ax = plt.subplots(figsize=(8, 5))
-    barplot = sns.barplot(data=top_monetary, x='session_id', y='monetary', ax=ax, color='tab:red')
-    ax.set_title("Monetary (Pendapatan Tertinggi)", fontsize=15)
-    ax.set_ylabel("Monetary (Total Revenue)", fontsize=12)
-    ax.set_xlabel("Session ID", fontsize=12)
-    for bar in barplot.patches:
-        barplot.annotate(format(bar.get_height(), '.0f'),
-                         (bar.get_x() + bar.get_width() / 2., bar.get_height()),
-                         ha='center', va='center',
-                         xytext=(0, 5),
-                         textcoords='offset points')
-    st.pyplot(fig)
-
-# Menampilkan tabel RFM yang lebih lengkap
-if show_rfm_details:
-    st.subheader("Informasi Lengkap RFM")
-    st.write(rfm_recap_df)
-# Footer dengan copyright
-st.caption("Copyright © 2025 Penyewaan Sepeda")
+st.markdown("""
+<style>
+.footer {
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    color: white;
+    text-align: center;
+    padding: 10px;
+}
+</style>
+<div class="footer">    
+    <p>Copyright © 2025 Penyewaan Sepeda</p>
+</div>
+""", unsafe_allow_html=True)
